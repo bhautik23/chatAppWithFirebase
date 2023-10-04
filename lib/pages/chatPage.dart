@@ -45,6 +45,11 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  deleteMessage(String messageId) {
+    // Implement the logic to delete the message using the messageId
+    DatabaseServices().deleteMessage(widget.groupId, messageId);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -125,11 +130,15 @@ class _ChatPageState extends State<ChatPage> {
             ? ListView.builder(
                 itemCount: snapshot.data?.docs.length,
                 itemBuilder: (context, index) {
+                  final messageId = snapshot.data?.docs[index].id;
                   return MessagTile(
+                    onDelete: () {
+                      deleteMessage(messageId??"");
+                    },
+                    isLastMessage: true,
                       message: snapshot.data?.docs[index]['message'],
                       sender: snapshot.data?.docs[index]['sender'],
-                      sentByMe: widget.userName ==
-                          snapshot.data?.docs[index]['sender']);
+                      sentByMe: widget.userName == snapshot.data?.docs[index]['sender']);
                 },
               )
             : SizedBox();
@@ -145,9 +154,17 @@ class _ChatPageState extends State<ChatPage> {
         "time": DateTime.now().microsecondsSinceEpoch,
       };
       DatabaseServices().sendMessage(widget.groupId,chatMessagMap);
+      sendNotificationToGroupMembers(widget.groupId, "${chatMessagMap["message"]}");
+
       setState(() {
         messageController.clear();
       });
     }
+  }
+
+  sendNotificationToGroupMembers(String groupId, String message) {
+    // Implement FCM logic to send a notification to group members
+    // You would typically get the list of group members and their FCM tokens
+    // and send a notification to each member.
   }
 }

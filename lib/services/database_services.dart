@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class DatabaseServices {
   final String? uid;
@@ -10,6 +11,7 @@ class DatabaseServices {
 
   final CollectionReference groupCollection =
       FirebaseFirestore.instance.collection("groups");
+
 
 //  saving the userdata
 
@@ -37,8 +39,7 @@ class DatabaseServices {
   }
 
 //  creatting a groups
-
-  Future createGroup(String userName, String id, String groupName) async {
+  Future createGroup(String userName, String id, String groupName, String groupPassword) async {
     DocumentReference groupDocumentReference = await groupCollection.add({
       "groupName": groupName,
       "groupIcon": "",
@@ -47,19 +48,21 @@ class DatabaseServices {
       "groupId": "",
       "recentMessage": "",
       "recentMessageSender": "",
+      "groupPassword": groupPassword, // Add the password field
     });
-    //update members
+
+    // Update members
     await groupDocumentReference.update({
       "members": FieldValue.arrayUnion(["${uid}_${userName}"]),
       "groupId": groupDocumentReference.id,
     });
 
-    DocumentReference userDocumenteReference = await userCollection.doc(uid);
-    return await userDocumenteReference.update({
-      "group":
-          FieldValue.arrayUnion(["${groupDocumentReference.id}_${groupName}"])
+    DocumentReference userDocumentReference = await userCollection.doc(uid);
+    return await userDocumentReference.update({
+      "group": FieldValue.arrayUnion(["${groupDocumentReference.id}_${groupName}"])
     });
   }
+
 
 //  getting the chats
   getChats(String groupId) async {
@@ -141,4 +144,15 @@ class DatabaseServices {
       "recentMessageTime": chatMessageData['time'].toString(),
     });
   }
+
+  // delete message
+
+  Future<void> deleteMessage(String groupId, String messageId) async {
+    try {
+      await groupCollection.doc(groupId).collection('messages').doc(messageId).delete();
+    } catch (e) {
+      print('Error deleting message: $e');
+    }
+  }
+
 }

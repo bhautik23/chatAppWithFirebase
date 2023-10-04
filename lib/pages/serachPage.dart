@@ -21,6 +21,7 @@ class _SearchPageState extends State<SearchPage> {
   bool isJoined = false;
   String userName = "";
   User? user;
+  bool hasGroupPassword = false;
 
   @override
   void initState() {
@@ -105,6 +106,38 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  Future<String?> showPasswordDialog(BuildContext context) async {
+    TextEditingController passwordController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Enter Group Password"),
+          content: TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: InputDecoration(hintText: "Password"),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, ""); // Provide a default value
+              },
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, passwordController.text ?? ""); // Provide a default value
+              },
+              child: Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
   initiateSearchMethod() async {
     if (searchController.text.isNotEmpty) {
       setState(() {
@@ -125,106 +158,111 @@ class _SearchPageState extends State<SearchPage> {
   groupList() {
     return hasUserSearced
         ? ListView.builder(
-            shrinkWrap: true,
-            itemCount: searchSanpshot!.docs.length,
-            itemBuilder: (context, index) {
-              return groupTile(
-                userName,
-                searchSanpshot!.docs[index]['groupId'],
-                searchSanpshot!.docs[index]['groupName'],
-                searchSanpshot!.docs[index]['admin'],
-              );
-            },
-          )
+      shrinkWrap: true,
+      itemCount: searchSanpshot!.docs.length,
+      itemBuilder: (context, index) {
+        return groupTile(
+          userName,
+          searchSanpshot!.docs[index]['groupId'],
+          searchSanpshot!.docs[index]['groupName'],
+          searchSanpshot!.docs[index]['admin'],
+          searchSanpshot!.docs[index]['groupPassword'],
+        );
+      },
+    )
         : Container();
   }
 
-  joinedOrNot(
-      String userName, String groupId, String groupName, String admin) async {
-    await DatabaseServices(uid: user!.uid)
-        .isUserJoined(groupName, groupId, userName)
-        .then((value) {
-      setState(() {
-        isJoined = value;
-      });
+
+  joinedOrNot(String userName, String groupId, String groupName, String admin, String groupPassword) async {
+    bool isUserJoined = await DatabaseServices(uid: user!.uid).isUserJoined(groupName, groupId, userName);
+    bool doesGroupHavePassword = groupPassword.isNotEmpty;
+
+    setState(() {
+      isJoined = isUserJoined;
+      hasGroupPassword = doesGroupHavePassword;
     });
   }
 
-  Widget groupTile(
-      String userName, String groupId, String groupName, String admin) {
-    //already exit in groups
 
-    joinedOrNot(userName, groupId, groupName, admin);
+  Widget groupTile(String userName, String groupId, String groupName, String admin, String groupPassword) {
+    joinedOrNot(userName, groupId, groupName, admin, groupPassword);
 
     return ListTile(
-        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        leading: CircleAvatar(
-          radius: 30,
-          backgroundColor: Theme.of(context).primaryColor.withOpacity(.7),
+      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      leading: CircleAvatar(
+        radius: 30,
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(.7),
+        child: Text(
+          groupName.substring(0, 1).toUpperCase(),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+      title: Text(
+        groupName,
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+      subtitle: Text("Admin: ${getName(admin)}"),
+      trailing: InkWell(
+        onTap: () async {
+          if (groupPassword.isNotEmpty) {
+            // Group has a password, show password dialog
+            String? enteredPassword = await showPasswordDialog(context);
+            if (enteredPassword!.isNotEmpty && enteredPassword == groupPassword) {
+              // Password is correct, join the group
+              handleGroupJoin(groupId, userName, groupName);
+            } else {
+              // Password is incorrect or user cancelled
+              showSnackbar(context, Colors.red, "Incorrect password or cancelled");
+            }
+          } else {
+            // Group has no password, directly join
+            handleGroupJoin(groupId, userName, groupName);
+          }
+        },
+        child: isJoined
+            ? Container(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.black,
+            border: Border.all(color: Colors.white, width: 2),
+          ),
           child: Text(
-            groupName.substring(0, 1).toUpperCase(),
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            "Joined",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        )
+            : Container(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Theme.of(context).primaryColor.withOpacity(.7),
+          ),
+          child: const Text(
+            "Join",
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
           ),
         ),
-        title: Text(
-          groupName,
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text("Admin: ${getName(admin)}"),
-        trailing: InkWell(
-          onTap: () async {
-            await DatabaseServices(uid: user!.uid)
-                .togglenGroupJoin(groupId, userName, groupName);
-            if (isJoined) {
-              setState(() {
-                isJoined = !isJoined;
-              });
-              showSnackbar(
-                  context,
-                  Theme.of(context).primaryColor.withOpacity(.9),
-                  "Successfully joined he group");
-              Future.delayed(Duration(seconds: 2), () {
-                nextScreen(
-                    context,
-                    ChatPage(
-                        groupId: groupId,
-                        groupName: groupName,
-                        userName: userName));
-              });
-            } else {
-              setState(() {
-                isJoined = !isJoined;
-                showSnackbar(context, Colors.red, "Left the group $groupName");
-              });
-            }
-          },
-          child: isJoined
-              ? Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.black,
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Text(
-                    "Joined",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                )
-              : Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Theme.of(context).primaryColor.withOpacity(.7),
-                    // border: Border.all(color: Colors.white,width: 2),
-                  ),
-                  child: Text(
-                    "Join",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ),
-        ));
+      ),
+    );
+  }
+
+  void handleGroupJoin(String groupId, String userName, String groupName) async {
+    await DatabaseServices(uid: user!.uid).togglenGroupJoin(groupId, userName, groupName);
+    setState(() {
+      isJoined = !isJoined;
+    });
+    showSnackbar(
+      context,
+      Theme.of(context).primaryColor.withOpacity(.9),
+      "Successfully joined the group",
+    );
+    Future.delayed(Duration(seconds: 2), () {
+      nextScreen(
+        context,
+        ChatPage(groupId: groupId, groupName: groupName, userName: userName),
+      );
+    });
   }
 }
